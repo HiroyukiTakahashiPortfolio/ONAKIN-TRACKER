@@ -1,0 +1,35 @@
+// app.config.ts
+export default {
+  expo: {
+    name: "onakin-tracker",
+    slug: "onakin-tracker",
+    version: "1.0.0",
+    orientation: "portrait",
+    icon: "./assets/icon.png",
+    userInterfaceStyle: "light",
+    newArchEnabled: true,
+    splash: {
+      image: "./assets/splash-icon.png",
+      resizeMode: "contain",
+      backgroundColor: "#ffffff"
+    },
+    ios: { supportsTablet: true },
+    android: {
+      adaptiveIcon: {
+        foregroundImage: "./assets/adaptive-icon.png",
+        backgroundColor: "#ffffff"
+      },
+      edgeToEdgeEnabled: true,
+      predictiveBackGestureEnabled: false
+    },
+    web: { favicon: "./assets/favicon.png" },
+    plugins: ["expo-web-browser"],
+
+    // ← ここに Supabase の値を入れる
+    extra: {
+      EXPO_PUBLIC_SUPABASE_URL: "https://bmbafzchpgcylffzjyzm.supabase.co",
+      EXPO_PUBLIC_SUPABASE_ANON_KEY:
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtYmFmemNocGdjeWxmZnpqeXptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzQ1MjAsImV4cCI6MjA3ODIxMDUyMH0.6emx4u97cz5Nj1-AY9PUxTS_zGTUVy7v_a7F5jZJ8xw"
+    }
+  }
+};

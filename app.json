@@ -28,6 +28,10 @@
     },
     "plugins": [
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "EXPO_PUBLIC_SUPABASE_URL": "https://bmbafzchpgcylffzjyzm.supabase.co",
+      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtYmFmemNocGdjeWxmZnpqeXptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzQ1MjAsImV4cCI6MjA3ODIxMDUyMH0.6emx4u97cz5Nj1-AY9PUxTS_zGTUVy7v_a7F5jZJ8xw"
+    }
   }
 }

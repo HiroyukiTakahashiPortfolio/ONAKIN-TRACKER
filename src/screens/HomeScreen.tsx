@@ -1,5 +1,5 @@
 // src/screens/HomeScreen.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, ScrollView, Modal, TextInput } from 'react-native';
 import styles from '../ui/styles';
 import useAppState from '../state/useAppState';
@@ -11,12 +11,68 @@ import { titleForDays } from '../constants/phases';
 import { recommendedFor } from '../constants/recommended';
 import { TodayTipsRow } from '../components/TodayTipsRow';
 
+// ← ここがポイント：importはファイル先頭で！
+import { getSupabaseUserId, linkSupabaseAccountFromLocal } from '../lib/auth';
+
 export default function HomeScreen() {
   const { user, register, resetCounter, elapsedDays } = useAppState();
 
   const [open, setOpen] = useState(!user);
   const [name, setName] = useState('');
   const [adviceOpen, setAdviceOpen] = useState(false);
+
+  // Supabaseリンク用の状態
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  // クールダウン・処理中状態
+const [linkPending, setLinkPending] = useState(false);
+const [cooldown, setCooldown] = useState(0);
+
+  // ローカルユーザーがいる & まだSupabase未ログインならリンクモーダルを出す
+  useEffect(() => {
+    (async () => {
+      if (!user) return;
+      const supaUid = await getSupabaseUserId();
+      if (!supaUid) setLinkOpen(true);
+    })();
+  }, [user]);
+
+async function linkNow() {
+  if (!user || linkPending || cooldown > 0) return;
+  try {
+    setLinkPending(true);
+    await linkSupabaseAccountFromLocal({
+      email: email.trim(),
+      password: pw || undefined,
+      displayName: user.name,
+      registeredAtISO: user.registeredAt,
+    });
+    setLinkOpen(false);
+    alert('オンライン機能が有効化されました！');
+  } catch (e: any) {
+    // レート制限(429)などの待機秒数を検出
+    const msg = String(e?.message ?? '');
+    const m = msg.match(/after (\d+) seconds?/i);
+    if (m) {
+      const sec = Number(m[1] || 60);
+      setCooldown(sec);
+      const timer = setInterval(() => {
+        setCooldown((s) => {
+          if (s <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return s - 1;
+        });
+      }, 1000);
+    } else {
+      alert(`リンク失敗: ${msg}`);
+    }
+  } finally {
+    setLinkPending(false);
+  }
+}
 
   // 直近で解禁された記事を1つだけ抽出（リセット直後に表示）
   const advice = useMemo(
@@ -30,8 +86,43 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
-      {/* 登録モーダル */}
-      <Modal visible={open} animationType="fade" onRequestClose={() => {}}>
+      {/* Supabaseリンクモーダル */}
+      <Modal visible={linkOpen} animationType="fade" onRequestClose={() => {}}>
+        <View style={{ padding: 20 }}>
+          <Text style={{ fontSize: 18, fontWeight: '800', marginBottom: 12 }}>オンライン機能を有効化</Text>
+          <Text style={{ marginBottom: 8 }}>チャットなどのオンライン機能を使うには、メールを紐づけます。</Text>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="メールアドレス"
+            keyboardType="email-address"
+            style={{ borderWidth: 1, padding: 10, marginBottom: 8 }}
+          />
+          <TextInput
+            value={pw}
+            onChangeText={setPw}
+            placeholder="パスワード（任意）"
+            secureTextEntry
+            style={{ borderWidth: 1, padding: 10, marginBottom: 12 }}
+          />
+          <PrimaryButton
+  label={
+    cooldown > 0
+      ? `再試行まで ${cooldown}s`
+      : linkPending
+      ? '処理中...'
+      : '有効化する'
+  }
+  onPress={linkNow}
+  disabled={linkPending || cooldown > 0}
+/>
+
+          <Text style={{ marginTop: 12, opacity: 0.7 }}>※ 後から設定も可能です</Text>
+        </View>
+      </Modal>
+
+      {/* 登録モーダル（リンク用モーダルが開いている間は出さない） */}
+      <Modal visible={open && !linkOpen} animationType="fade" onRequestClose={() => {}}>
         <View style={styles.modalSafe}>
           <Text style={styles.modalTitle}>ユーザー登録</Text>
           <Text style={{ marginBottom: 8 }}>名前を入力してください（後で変更可）</Text>
@@ -40,6 +131,7 @@ export default function HomeScreen() {
             onChangeText={setName}
             placeholder="例: オナ禁スカイウオーカー"
             style={styles.input}
+            autoFocus
           />
           <PrimaryButton
             label="登録する"
