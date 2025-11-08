@@ -9,24 +9,22 @@ import RecommendedArticles from '../components/RecommendedArticles';
 import { unlockedArticles } from '../constants/articles';
 import { titleForDays } from '../constants/phases';
 import { recommendedFor } from '../constants/recommended';
+import { TodayTipsRow } from '../components/TodayTipsRow';
 
 export default function HomeScreen() {
-  const {
-    user,
-    register,
-    resetCounter,
-    elapsedDays,
-  } = useAppState();
+  const { user, register, resetCounter, elapsedDays } = useAppState();
 
   const [open, setOpen] = useState(!user);
   const [name, setName] = useState('');
   const [adviceOpen, setAdviceOpen] = useState(false);
 
+  // 直近で解禁された記事を1つだけ抽出（リセット直後に表示）
   const advice = useMemo(
     () => unlockedArticles(elapsedDays).slice(-1)[0],
     [elapsedDays]
   );
 
+  // 称号ラベルとレコメンド
   const stageLabel = titleForDays(elapsedDays);
   const recos = recommendedFor(elapsedDays);
 
@@ -66,9 +64,12 @@ export default function HomeScreen() {
             </Text>
           )}
         </View>
+
         <Text style={styles.daysBig}>{elapsedDays}</Text>
         <Text style={styles.daysLabel}>日 経過</Text>
+
         <View style={{ height: 8 }} />
+
         <PrimaryButton
           label="リセット（やり直し）"
           onPress={async () => {
@@ -100,6 +101,12 @@ export default function HomeScreen() {
 
       {/* onakin-blog へのおすすめ記事（解禁分） */}
       <RecommendedArticles stageLabel={stageLabel} items={recos} />
+
+      {/* 三段目：今日のひとこと（横3カード） */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>今日のひとこと</Text>
+        <TodayTipsRow currentTitle={stageLabel} />
+      </View>
 
       {/* 今読むと効く記事（アプリ内テキスト。解禁分のみ） */}
       <View style={styles.card}>
