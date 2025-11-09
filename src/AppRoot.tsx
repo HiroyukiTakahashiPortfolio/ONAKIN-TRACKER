@@ -1,8 +1,9 @@
 // src/AppRoot.tsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { MaterialIcons } from '@expo/vector-icons';
 
 import useAppState, { AppStateProvider } from './state/useAppState';
 import styles from './ui/styles';
@@ -11,9 +12,13 @@ import styles from './ui/styles';
 import HomeScreen from './screens/HomeScreen';
 import ArticlesScreen from './screens/ArticlesScreen';
 import CalendarScreen from './screens/CalendarScreen';
-// import ChatScreen from './screens/ChatScreen'; // ← 使わないのでコメントアウト
 import AdminScreen from './screens/AdminScreen';
 import PeriodChatScreen from './screens/PeriodChatScreen';
+import AuthScreen from './screens/AuthScreen';
+
+// Supabase関連
+import { supabase } from './lib/supabase';
+import { logoutSupabase } from './lib/auth';
 
 export default function AppRoot() {
   return (
@@ -23,9 +28,60 @@ export default function AppRoot() {
   );
 }
 
+type AuthPhase = 'checking' | 'authed' | 'guest';
+
 function InnerApp() {
   const insets = useSafeAreaInsets();
   const { tab, setTab, title, elapsedDays, user } = useAppState();
+
+  // ヘッダー表示用
+  const [email, setEmail] = useState<string | null>(null);
+  const [authPhase, setAuthPhase] = useState<AuthPhase>('checking');
+
+  // 起動時にセッション取得 → 以後も購読
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      const session = data?.session ?? null;
+      setEmail(session?.user?.email ?? null);
+      setAuthPhase(session ? 'authed' : 'guest');
+
+      const sub = supabase.auth.onAuthStateChange((_event, nextSession) => {
+        setEmail(nextSession?.user?.email ?? null);
+        setAuthPhase(nextSession ? 'authed' : 'guest');
+        if (nextSession) setTab('Home');
+      });
+      unsub = () => sub.data.subscription.unsubscribe();
+    })();
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [setTab]);
+
+  // ログアウト
+  async function onPressLogout() {
+    try {
+      await logoutSupabase();
+      setEmail(null);
+      setAuthPhase('guest'); // ← ここで確実に未ログインUIへ固定
+      setTab('Home');
+      if (Platform.OS === 'web') {
+        // eslint-disable-next-line no-alert
+        alert('ログアウトしました');
+      }
+    } catch (e: any) {
+      const msg = String(e?.message ?? 'Unknown error');
+      if (Platform.OS === 'web') {
+        // eslint-disable-next-line no-alert
+        alert(`ログアウト失敗: ${msg}`);
+      } else {
+        Alert.alert('ログアウト失敗', msg);
+      }
+    }
+  }
 
   const TabBar = () => {
     const items: { key: typeof tab; label: string }[] = [
@@ -35,43 +91,95 @@ function InnerApp() {
       { key: 'Chat', label: 'チャット' },
       { key: 'Admin', label: '管理' },
     ];
-
     return (
       <View style={styles.tabbar}>
         {items.map((it) => {
           const active = tab === it.key;
           return (
-            <Pressable
+            <TouchableOpacity
               key={it.key}
               onPress={() => setTab(it.key)}
-              style={({ pressed }) => [
-                styles.tabBtn,
-                active && styles.tabBtnActive,
-                pressed && { opacity: 0.7 },
-              ]}
+              activeOpacity={0.7}
+              style={[styles.tabBtn, active && styles.tabBtnActive]}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
             >
               <Text style={[styles.tabText, active && styles.tabTextActive]}>{it.label}</Text>
-            </Pressable>
+            </TouchableOpacity>
           );
         })}
       </View>
     );
   };
 
+  // 認証判定が終わるまで何も出さない（スプラッシュのみ）
+  if (authPhase === 'checking') {
+    return (
+      <SafeAreaView style={[styles.safe, { paddingTop: insets.top, alignItems: 'center', justifyContent: 'center' }]}>
+        <StatusBar style="light" />
+        <ActivityIndicator />
+        <Text style={[styles.muted, { marginTop: 8 }]}>起動中…</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // 未ログイン時は AuthScreen のみ描画（本体は一切描画しない）
+  if (authPhase === 'guest') {
+    return (
+      <SafeAreaView style={[styles.safe, { paddingTop: insets.top }]}>
+        <StatusBar style="light" />
+        <AuthScreen />
+      </SafeAreaView>
+    );
+  }
+
+  // ここから先は “ログイン済み” のみ
   return (
     <SafeAreaView style={[styles.safe, { paddingTop: insets.top }]}>
       <StatusBar style="light" />
 
       {/* ヘッダー */}
-      <View style={styles.header}>
-        <Text style={styles.title}>
-          {user ? `${user.name} のオナ禁トラッカー` : 'オナ禁トラッカー'}
-        </Text>
-        <Text style={styles.subtitle}>
-          称号: <Text style={styles.bold}>{title}</Text>／ 経過: <Text style={styles.bold}>{elapsedDays}</Text>日
-        </Text>
+      <View
+        style={[
+          styles.header,
+          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 8, zIndex: 10 },
+        ]}
+      >
+        {/* 左：タイトル */}
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <Text style={styles.title}>
+            {user ? `${user.name} のオナ禁トラッカー` : 'オナ禁トラッカー'}
+          </Text>
+          <Text style={styles.subtitle}>
+            称号: <Text style={styles.bold}>{title}</Text>／ 経過: <Text style={styles.bold}>{elapsedDays}</Text>日
+          </Text>
+        </View>
+
+        {/* 右：メール + ログアウト */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {email ? (
+            <Text style={[styles.muted, { fontSize: 12, marginRight: 8, maxWidth: 220 }]} numberOfLines={1}>
+              {email}
+            </Text>
+          ) : null}
+          <TouchableOpacity
+            onPress={onPressLogout}
+            activeOpacity={0.7}
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: '#334155',
+              backgroundColor: '#0b1220',
+            }}
+          >
+            <MaterialIcons name="logout" size={16} color="#cbd5e1" />
+            <Text style={{ color: '#cbd5e1', fontSize: 12, fontWeight: '700', marginLeft: 6 }}>ログアウト</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* 画面本体 */}
@@ -79,12 +187,10 @@ function InnerApp() {
         {tab === 'Home' && <HomeScreen />}
         {tab === 'Articles' && <ArticlesScreen />}
         {tab === 'Calendar' && <CalendarScreen />}
-        {/* {tab === 'Chat' && <ChatScreen />} ← 旧 */}
-        {tab === 'Chat' && <PeriodChatScreen />} {/* 新チャット画面 */}
+        {tab === 'Chat' && <PeriodChatScreen />}
         {tab === 'Admin' && <AdminScreen />}
       </View>
 
-      {/* 下タブ */}
       <TabBar />
     </SafeAreaView>
   );
