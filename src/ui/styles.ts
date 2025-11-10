@@ -1,61 +1,102 @@
-import { StyleSheet } from 'react-native';
+// src/ui/styles.ts
+import { StyleSheet, Platform } from 'react-native';
+
+const PALETTE = {
+  bg: '#d1dfecff', // 全体背景
+  card: '#FAFBFC', // ← 白より少しグレー。柔らかくて上品。
+  surface: '#F0F6FB',
+  border: '#E1E8EF',
+  text: '#1E293B',
+  textMuted: '#64748B',
+  heading: '#0F172A',
+  accent: '#3B82F6',
+  accentLight: '#E0F2FE',
+  accentBorder: '#8fb3ddff',
+  danger: '#EF4444',
+};
+
+const cardShadow = Platform.select({
+  ios: {
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  android: { elevation: 3 },
+  default: {},
+});
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0f172a' },
+  safe: { flex: 1, backgroundColor: PALETTE.bg },
 
   header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  title: { color: 'white', fontSize: 20, fontWeight: '800' },
-  subtitle: { color: '#cbd5e1', marginTop: 2 },
-  bold: { fontWeight: '900', color: 'white' },
+  title: { color: PALETTE.heading, fontSize: 20, fontWeight: '800' },
+  subtitle: { color: PALETTE.textMuted, marginTop: 2 },
 
-  card: { backgroundColor: 'white', marginHorizontal: 16, marginVertical: 12, borderRadius: 16, padding: 16 },
+  card: {
+    backgroundColor: PALETTE.card, // ← 柔らかい白
+    marginHorizontal: 16,
+    marginVertical: 12,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    ...cardShadow,
+  },
 
-  rankBadge: { fontSize: 16, fontWeight: '900', color: '#0f172a', backgroundColor: '#E8F5E9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
-  rankSub: { marginTop: 6, color: '#374151' },
-  daysBig: { fontSize: 64, lineHeight: 72, fontWeight: '900', color: '#0f172a', marginTop: 10 },
-  daysLabel: { fontSize: 16, color: '#374151', fontWeight: '700' },
+  rankBadge: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: PALETTE.accent,
+    backgroundColor: PALETTE.accentLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: PALETTE.accentBorder,
+  },
 
-  sectionTitle: { fontSize: 16, fontWeight: '800', marginBottom: 8 },
-  muted: { color: '#6b7280' },
+  rankSub: { marginTop: 6, color: PALETTE.textMuted },
+  daysBig: { fontSize: 64, lineHeight: 72, fontWeight: '900', color: PALETTE.heading, marginTop: 10 },
+  daysLabel: { fontSize: 16, color: PALETTE.textMuted, fontWeight: '700' },
 
-  btn: { paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
-  btnSecondary: { backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb' },
-  btnText: { color: 'white', fontWeight: '800' },
+  sectionTitle: { fontSize: 16, fontWeight: '800', marginBottom: 8, color: PALETTE.heading },
+  muted: { color: PALETTE.textMuted },
 
-  articleRow: { marginBottom: 12 },
-  articleText: { color: '#111827', lineHeight: 20, marginTop: 4 },
+  btn: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: PALETTE.accent,
+    ...cardShadow,
+  },
+  btnText: { color: '#FFFFFF', fontWeight: '800' },
 
   recRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: PALETTE.surface,
     padding: 12,
     borderRadius: 12,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
   },
 
-  row: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 8 },
-  rowItem: { flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 12 },
+// src/ui/styles.ts のフッター関連をこれに戻す
+tabbar: {
+  flexDirection: 'row',
+  backgroundColor: '#FFFFFF',      // ライト版のまま
+  paddingVertical: 8,
+  borderTopWidth: 1,
+  borderTopColor: '#E2E8F0',
+},
+tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 8 },
+tabBtnActive: { backgroundColor: '#E0F2FE' },
+tabText: { color: '#64748B', fontWeight: '800' },
+tabTextActive: { color: '#3B82F6' },
 
-  input: { backgroundColor: '#f3f4f6', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e5e7eb', color: '#111827', flex: 1 },
-  inputMultiline: { backgroundColor: '#f3f4f6', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e5e7eb', color: '#111827', minHeight: 120 },
-
-  msgRow: { marginBottom: 10, backgroundColor: '#f8fafc', padding: 8, borderRadius: 10 },
-  msgName: { fontWeight: '800', color: '#0f172a' },
-  msgText: { color: '#111827' },
-  msgMeta: { color: '#64748b', fontSize: 12 },
-  hideBtn: { marginTop: 6, backgroundColor: '#ef4444', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-
-  tabbar: { flexDirection: 'row', backgroundColor: '#0b1220', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#172036' },
-  tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 8 },
-  tabBtnActive: { backgroundColor: '#111827' },
-  tabText: { color: '#94a3b8', fontWeight: '800' },
-  tabTextActive: { color: '#16a34a' },
-
-  modalSafe: { flex: 1, backgroundColor: 'white', padding: 16, justifyContent: 'center' },
-  modalTitle: { fontSize: 20, fontWeight: '800', marginBottom: 12 },
-  preview: { color: '#111827', marginTop: 2 },
-  min: { color: '#64748b', fontSize: 12 },
 });
 
 export default styles;

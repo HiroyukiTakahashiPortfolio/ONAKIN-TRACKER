@@ -1,3 +1,4 @@
+// src/state/useAppState.ts
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Notifications from '../lib/notifications';
@@ -19,6 +20,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
 
+/** ISO文字列（例: 2025-11-10T03:12:00Z など）を YYYY-MM-DD に正規化。
+ *  未指定なら “今” を使う。 */
+function toYmd(iso?: string) {
+  // あなたの dayjs 設定（../lib/dayjs）で tz が効くなら tz('Asia/Tokyo') を挟んでもOK
+  return iso ? dayjs(iso).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD');
+}
+
 // 実装
 function useProvideAppState() {
   const [user, setUser] = React.useState<User | null>(null);
@@ -36,7 +44,6 @@ function useProvideAppState() {
       if (uRaw) setUser(JSON.parse(uRaw));
       if (jRaw) setJournal(JSON.parse(jRaw));
       if (cRaw) setChat(JSON.parse(cRaw));
-
       try {
         const { status } = await Notifications.getPermissionsAsync();
         if (status !== 'granted') await Notifications.requestPermissionsAsync();
@@ -45,6 +52,9 @@ function useProvideAppState() {
   }, []);
 
   const today = dayjs().format('YYYY-MM-DD');
+
+  /** 登録日（YYYY-MM-DD）からの経過日数を算出。
+   *  “最低1日表示”の仕様は従来どおり維持（例：当日は 1 日）。 */
   const elapsedDays = React.useMemo(() => {
     if (!user) return 0;
     const diff = dayjs().diff(dayjs(user.registeredAt, 'YYYY-MM-DD'), 'day');
@@ -53,79 +63,137 @@ function useProvideAppState() {
 
   const title = React.useMemo(() => titleForDays(elapsedDays), [elapsedDays]);
 
-  const persistAll = React.useCallback(async (u = user, j = journal, c = chat) => {
-    await Promise.all([
-      AsyncStorage.setItem(STORAGE.USER, JSON.stringify(u)),
-      AsyncStorage.setItem(STORAGE.JOURNAL, JSON.stringify(j)),
-      AsyncStorage.setItem(STORAGE.CHAT, JSON.stringify(c)),
-    ]);
-  }, [user, journal, chat]);
+  const persistAll = React.useCallback(
+    async (u = user, j = journal, c = chat) => {
+      await Promise.all([
+        AsyncStorage.setItem(STORAGE.USER, JSON.stringify(u)),
+        AsyncStorage.setItem(STORAGE.JOURNAL, JSON.stringify(j)),
+        AsyncStorage.setItem(STORAGE.CHAT, JSON.stringify(c)),
+      ]);
+    },
+    [user, journal, chat]
+  );
 
-  const register = React.useCallback(async (name: string) => {
-    const u: User = { id: 'me', name: name.trim() || '俺', registeredAt: today };
-    setUser(u);
-    await persistAll(u);
-  }, [persistAll, today]);
+  /** 登録。第二引数に Supabase の server_now()（ISO）を渡せるように拡張 */
+  const register = React.useCallback(
+    async (name: string, isoOverride?: string) => {
+      const registeredAtYmd = toYmd(isoOverride); // ← ISO→YYYY-MM-DD へ正規化
+      const u: User = {
+        id: 'me',
+        name: name.trim() || '俺',
+        registeredAt: registeredAtYmd,
+      };
+      setUser(u);
+      await persistAll(u);
+    },
+    [persistAll]
+  );
 
-  const resetCounter = React.useCallback(async () => {
-    if (!user) return;
-    const u = { ...user, registeredAt: today };
-    setUser(u);
-    await persistAll(u);
-  }, [user, persistAll, today]);
+  /** リセット。Supabaseの server_now() を ISO で受けて、YYYY-MM-DD で保存する */
+  const resetCounter = React.useCallback(
+    async (isoOverride?: string) => {
+      if (!user) return;
+      const registeredAtYmd = toYmd(isoOverride); // ← ここが肝
+      const u = { ...user, registeredAt: registeredAtYmd };
+      setUser(u);
+      await persistAll(u);
+      // もし他に「連続記録テーブル」や「当日ログ」を使っている場合は、
+      // ここであわせてクリア・再初期化してください。
+    },
+    [user, persistAll]
+  );
 
-  const saveJournal = React.useCallback(async (date: string, note: string) => {
-    const next = { ...journal, [date]: { date, note } };
-    setJournal(next);
-    await persistAll(user, next, chat);
-  }, [journal, persistAll, user, chat]);
+  const saveJournal = React.useCallback(
+    async (date: string, note: string) => {
+      const next = { ...journal, [date]: { date, note } };
+      setJournal(next);
+      await persistAll(user, next, chat);
+    },
+    [journal, persistAll, user, chat]
+  );
 
-  const sendChat = React.useCallback(async (room: string, text: string) => {
-    if (!user) return;
-    if (user.banned) return;
-    const now = Date.now();
-    const lastMine = chat.filter(m => m.userId === user.id).sort((a,b)=>b.createdAt-a.createdAt)[0];
-    if (user.muted) return;
-    if (lastMine && now - lastMine.createdAt < 60_000) return;
-    const msg: ChatMessage = { id: `${now}`, room, userId: user.id, name: user.name, text: text.trim(), createdAt: now };
-    const next = [...chat, msg];
-    setChat(next);
-    await persistAll(user, journal, next);
-  }, [user, chat, persistAll, journal]);
+  const sendChat = React.useCallback(
+    async (room: string, text: string) => {
+      if (!user) return;
+      if (user.banned) return;
+      const now = Date.now();
+      const lastMine = chat
+        .filter((m) => m.userId === user.id)
+        .sort((a, b) => b.createdAt - a.createdAt)[0];
+      if (user.muted) return;
+      if (lastMine && now - lastMine.createdAt < 60_000) return;
+      const msg: ChatMessage = {
+        id: `${now}`,
+        room,
+        userId: user.id,
+        name: user.name,
+        text: text.trim(),
+        createdAt: now,
+      };
+      const next = [...chat, msg];
+      setChat(next);
+      await persistAll(user, journal, next);
+    },
+    [user, chat, persistAll, journal]
+  );
 
-  const hideMessage = React.useCallback(async (id: string) => {
-    const next = chat.map(m => (m.id === id ? { ...m, hidden: true } : m));
-    setChat(next);
-    await persistAll(user, journal, next);
-  }, [chat, persistAll, user, journal]);
+  const hideMessage = React.useCallback(
+    async (id: string) => {
+      const next = chat.map((m) => (m.id === id ? { ...m, hidden: true } : m));
+      setChat(next);
+      await persistAll(user, journal, next);
+    },
+    [chat, persistAll, user, journal]
+  );
 
-  const clearHidden = React.useCallback(async () => {
-    const next = chat.map(m => ({ ...m, hidden: false }));
-    setChat(next);
-    await persistAll(user, journal, next);
-  }, [chat, persistAll, user, journal]);
+  const clearHidden = React.useCallback(
+    async () => {
+      const next = chat.map((m) => ({ ...m, hidden: false }));
+      setChat(next);
+      await persistAll(user, journal, next);
+    },
+    [chat, persistAll, user, journal]
+  );
 
-  const setBanned = React.useCallback(async (b: boolean) => {
-    if (!user) return;
-    const u = { ...user, banned: b };
-    setUser(u);
-    await persistAll(u, journal, chat);
-  }, [user, persistAll, journal, chat]);
+  const setBanned = React.useCallback(
+    async (b: boolean) => {
+      if (!user) return;
+      const u = { ...user, banned: b };
+      setUser(u);
+      await persistAll(u, journal, chat);
+    },
+    [user, persistAll, journal, chat]
+  );
 
-  const setMuted = React.useCallback(async (m: boolean) => {
-    if (!user) return;
-    const u = { ...user, muted: m };
-    setUser(u);
-    await persistAll(u, journal, chat);
-  }, [user, persistAll, journal, chat]);
+  const setMuted = React.useCallback(
+    async (m: boolean) => {
+      if (!user) return;
+      const u = { ...user, muted: m };
+      setUser(u);
+      await persistAll(u, journal, chat);
+    },
+    [user, persistAll, journal, chat]
+  );
 
   return {
     // state
-    user, journal, chat, tab, setTab,
+    user,
+    journal,
+    chat,
+    tab,
+    setTab,
     // derived
-    elapsedDays, title, today,
+    elapsedDays,
+    title,
+    today,
     // actions
-    register, resetCounter, saveJournal, sendChat,
-    hideMessage, clearHidden, setBanned, setMuted,
+    register,         // register(name, isoOverride?)
+    resetCounter,     // resetCounter(isoOverride?)
+    saveJournal,
+    sendChat,
+    hideMessage,
+    clearHidden,
+    setBanned,
+    setMuted,
   };
 }

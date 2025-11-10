@@ -11,7 +11,7 @@ import styles from './ui/styles';
 // screens
 import HomeScreen from './screens/HomeScreen';
 import ArticlesScreen from './screens/ArticlesScreen';
-import CalendarScreen from './screens/CalendarScreen';
+import CalendarJournalScreen from './screens/CalendarJournalScreen';
 import AdminScreen from './screens/AdminScreen';
 import PeriodChatScreen from './screens/PeriodChatScreen';
 import AuthScreen from './screens/AuthScreen';
@@ -186,7 +186,7 @@ function InnerApp() {
       <View style={{ flex: 1 }}>
         {tab === 'Home' && <HomeScreen />}
         {tab === 'Articles' && <ArticlesScreen />}
-        {tab === 'Calendar' && <CalendarScreen />}
+        {tab === 'Calendar' && <CalendarJournalScreen />}
         {tab === 'Chat' && <PeriodChatScreen />}
         {tab === 'Admin' && <AdminScreen />}
       </View>
