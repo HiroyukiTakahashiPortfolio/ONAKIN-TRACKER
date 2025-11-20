@@ -1,7 +1,15 @@
 // src/AppRoot.tsx
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { View, Text, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Alert,
+  Platform,
+  ActivityIndicator,
+  Image,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -66,7 +74,7 @@ function InnerApp() {
     try {
       await logoutSupabase();
       setEmail(null);
-      setAuthPhase('guest'); // ← ここで確実に未ログインUIへ固定
+      setAuthPhase('guest');
       setTab('Home');
       if (Platform.OS === 'web') {
         // eslint-disable-next-line no-alert
@@ -115,7 +123,12 @@ function InnerApp() {
   // 認証判定が終わるまで何も出さない（スプラッシュのみ）
   if (authPhase === 'checking') {
     return (
-      <SafeAreaView style={[styles.safe, { paddingTop: insets.top, alignItems: 'center', justifyContent: 'center' }]}>
+      <SafeAreaView
+        style={[
+          styles.safe,
+          { paddingTop: insets.top, alignItems: 'center', justifyContent: 'center' },
+        ]}
+      >
         <StatusBar style="light" />
         <ActivityIndicator />
         <Text style={[styles.muted, { marginTop: 8 }]}>起動中…</Text>
@@ -142,23 +155,51 @@ function InnerApp() {
       <View
         style={[
           styles.header,
-          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 8, zIndex: 10 },
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingRight: 8,
+            zIndex: 10,
+          },
         ]}
       >
-        {/* 左：タイトル */}
-        <View style={{ flex: 1, paddingRight: 8 }}>
-          <Text style={styles.title}>
-            {user ? `${user.name} のオナ禁トラッカー` : 'オナ禁トラッカー'}
-          </Text>
-          <Text style={styles.subtitle}>
-            称号: <Text style={styles.bold}>{title}</Text>／ 経過: <Text style={styles.bold}>{elapsedDays}</Text>日
-          </Text>
+        {/* 左：ロゴ + タイトル */}
+        <View
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingRight: 8,
+          }}
+        >
+          <Image
+            source={require('../assets/mindreset-logo.png')}
+            style={{
+              width: 140,
+              height: 60,
+              marginRight: 10,
+            }}
+            resizeMode="contain"
+          />
+          <View style={{ marginTop: 2 }}>
+            <Text style={styles.title}>
+              {user ? `${user.name} のMind Reset` : 'Mind Reset'}
+            </Text>
+            <Text style={styles.subtitle}>
+              称号: <Text style={styles.bold}>{title}</Text>／ 経過:{' '}
+              <Text style={styles.bold}>{elapsedDays}</Text>日
+            </Text>
+          </View>
         </View>
 
         {/* 右：メール + ログアウト */}
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           {email ? (
-            <Text style={[styles.muted, { fontSize: 12, marginRight: 8, maxWidth: 220 }]} numberOfLines={1}>
+            <Text
+              style={[styles.muted, { fontSize: 12, marginRight: 8, maxWidth: 220 }]}
+              numberOfLines={1}
+            >
               {email}
             </Text>
           ) : null}
@@ -177,7 +218,16 @@ function InnerApp() {
             }}
           >
             <MaterialIcons name="logout" size={16} color="#cbd5e1" />
-            <Text style={{ color: '#cbd5e1', fontSize: 12, fontWeight: '700', marginLeft: 6 }}>ログアウト</Text>
+            <Text
+              style={{
+                color: '#cbd5e1',
+                fontSize: 12,
+                fontWeight: '700',
+                marginLeft: 6,
+              }}
+            >
+              ログアウト
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

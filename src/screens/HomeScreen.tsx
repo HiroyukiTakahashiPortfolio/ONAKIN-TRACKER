@@ -6,22 +6,19 @@ import useAppState from '../state/useAppState';
 import dayjs from '../lib/dayjs';
 import PrimaryButton from '../components/PrimaryButton';
 import RecommendedArticles from '../components/RecommendedArticles';
-import { unlockedArticles } from '../constants/articles';
+import { unlockedArticles, nextInternalArticle } from '../constants/articles';
 import { titleForDays } from '../constants/phases';
 import { recommendedFor } from '../constants/recommended';
-import { TodayTipsRow } from '../components/TodayTipsRow';
+import TodayTipsRow from '../components/TodayTipsRow';
 import { supabase } from '../lib/supabase';
 
 /* ----------------------------------------------------------------
   1) Supabase 連携：開始時刻（streak_started_at）を用意＆取得
-     - 初回: profiles.created_at を user_settings.streak_started_at にコピー
-     - 以降: user_settings.streak_started_at を読む
 ----------------------------------------------------------------- */
 async function ensureStreakStart(): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  // user_settings.streak_started_at を確認
   const { data: s, error: sErr } = await supabase
     .from('user_settings')
     .select('streak_started_at')
@@ -29,33 +26,25 @@ async function ensureStreakStart(): Promise<string | null> {
     .single();
 
   if (sErr && sErr.code !== 'PGRST116') {
-    // PGRST116 = no rows
     console.warn('user_settings fetch error', sErr);
   }
-
-  // 既にあるならそれを使う
   if (s?.streak_started_at) {
     return s.streak_started_at as string;
   }
 
-  // 未設定なら profiles.created_at をコピー
   const { data: p, error: pErr } = await supabase
     .from('profiles')
     .select('created_at')
     .eq('id', user.id)
     .single();
-  if (pErr) {
-    console.warn('profiles fetch error', pErr);
-  }
+  if (pErr) console.warn('profiles fetch error', pErr);
 
   const seed = p?.created_at ?? new Date().toISOString();
   const { error: upErr } = await supabase
     .from('user_settings')
     .update({ streak_started_at: seed })
     .eq('user_id', user.id);
-  if (upErr) {
-    console.warn('user_settings update error', upErr);
-  }
+  if (upErr) console.warn('user_settings update error', upErr);
   return seed;
 }
 
@@ -75,7 +64,6 @@ async function resetStreakOnServer(): Promise<string | null> {
     .eq('user_id', user.id);
   if (upErr) throw upErr;
 
-  // 履歴（任意）
   const { error: logErr } = await supabase
     .from('reset_logs').insert({ user_id: user.id, reset_at: nowISO });
   if (logErr) console.warn('reset_logs insert warn', logErr);
@@ -84,7 +72,7 @@ async function resetStreakOnServer(): Promise<string | null> {
 }
 
 /* ----------------------------------------------------------------
-  3) 経過タイマー: startAtISO から "日・時間・分・秒" と HH:MM:SS を1秒ごと再計算
+  3) 経過タイマー
 ----------------------------------------------------------------- */
 function useElapsedSince(startAtISO?: string | null) {
   const [now, setNow] = useState<number>(Date.now());
@@ -116,12 +104,12 @@ function useElapsedSince(startAtISO?: string | null) {
 export default function HomeScreen() {
   const { user, register, resetCounter, elapsedDays } = useAppState();
 
-  // ローカル登録モーダル（これはアプリ内プロフィール用。オンライン認証とは無関係）
+  // ローカル登録モーダル
   const [open, setOpen] = useState(!user);
   const [name, setName] = useState('');
   const [adviceOpen, setAdviceOpen] = useState(false);
 
-  // Supabase 開始時刻（秒カウントの基準）
+  // Supabase 開始時刻
   const [startISO, setStartISO] = useState<string | null>(null);
   useEffect(() => {
     (async () => {
@@ -134,17 +122,19 @@ export default function HomeScreen() {
     })();
   }, []);
 
-  // 直近で解禁された記事を1つだけ抽出（リセット直後に表示）
-  const advice = useMemo(
-    () => unlockedArticles(elapsedDays).slice(-1)[0],
-    [elapsedDays]
-  );
+  // 内部記事（アプリ内）※リセット直後モーダル表示用の最後の1本
+  const advice = useMemo(() => unlockedArticles(elapsedDays).slice(-1)[0], [elapsedDays]);
 
-  // 称号ラベルとレコメンド
+  // 称号ラベル
   const stageLabel = titleForDays(elapsedDays);
-  const recos = recommendedFor(elapsedDays);
 
-  // 経過 時:分:秒（Supabase streak_started_at 基準）
+  // 外部ブログの「今読むと効く記事」：日数に応じた配列（一次元）
+  const recItems = useMemo(() => recommendedFor(elapsedDays), [elapsedDays]);
+
+  // 「次にアンロックされる内部記事」を1本だけ取得
+  const nextArticle = useMemo(() => nextInternalArticle(elapsedDays), [elapsedDays]);
+
+  // 経過 時:分:秒
   const elapsed = useElapsedSince(startISO);
 
   const compactInput = {
@@ -161,7 +151,7 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
-      {/* ローカル登録モーダル（※オンライン認証は AuthScreen 側） */}
+      {/* ローカル登録モーダル */}
       <Modal visible={open} animationType="fade" onRequestClose={() => {}}>
         <View style={styles.modalSafe}>
           <Text style={styles.modalTitle}>ユーザー登録</Text>
@@ -177,7 +167,6 @@ export default function HomeScreen() {
             onPress={async () => {
               await register(name.trim());
               setOpen(false);
-              // ログイン直後に Supabase の開始時刻も整合（profiles.created_at が変わるわけではないが初期コピーを保証）
               try {
                 const iso = await ensureStreakStart();
                 if (iso) setStartISO(iso);
@@ -201,11 +190,9 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* 既存：経過「日」 */}
         <Text style={styles.daysBig}>{elapsedDays}</Text>
         <Text style={styles.daysLabel}>日 経過</Text>
 
-        {/* 追加：経過「時間・分・秒」（総時間も併記） */}
         <View style={{ marginTop: 8 }}>
           <Text style={{ textAlign: 'center', opacity: 0.85 }}>
             （{elapsed.label} / {elapsed.hms}）
@@ -214,26 +201,22 @@ export default function HomeScreen() {
 
         <View style={{ height: 8 }} />
         <PrimaryButton
-  label="リセット（やり直し）"
-  onPress={async () => {
-    try {
-      // 1) Supabase の開始時刻を server_now で更新（ISO受け取り）
-      const iso = await resetStreakOnServer();
-      if (iso) setStartISO(iso);      // 秒カウント用の表示を即更新
-
-      // 2) ローカル状態も同じISOで更新（←ココが肝）
-      await resetCounter(iso ?? undefined);
-
-      setAdviceOpen(true);
-    } catch (e) {
-      console.warn(e);
-      Alert.alert('エラー', 'リセットに失敗しました。通信状況をご確認ください。');
-    }
-  }}
-/>
+          label="リセット（やり直し）"
+          onPress={async () => {
+            try {
+              const iso = await resetStreakOnServer();
+              if (iso) setStartISO(iso);
+              await resetCounter(iso ?? undefined);
+              setAdviceOpen(true);
+            } catch (e) {
+              console.warn(e);
+              Alert.alert('エラー', 'リセットに失敗しました。通信状況をご確認ください。');
+            }
+          }}
+        />
       </View>
 
-      {/* リセット直後アドバイス */}
+      {/* リセット直後アドバイス（アプリ内テキスト） */}
       <Modal
         visible={adviceOpen}
         animationType="slide"
@@ -253,26 +236,28 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {/* おすすめ記事（外部ブログ） */}
-      <RecommendedArticles stageLabel={stageLabel} items={recos} />
+      {/* 外部ブログ：今読むと効く記事（リンクで外部へ） */}
+      <RecommendedArticles stageLabel={stageLabel} items={recItems} />
 
-      {/* 三段目：今日のひとこと（横3カード） */}
+      {/* 今日のひとこと（3カテゴリ） */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>今日のひとこと</Text>
         <TodayTipsRow currentTitle={stageLabel} />
       </View>
 
-      {/* 今読むと効く記事（アプリ内テキスト。解禁分のみ） */}
+      {/* 次にアンロックされる記事（タイトルだけ表示） */}
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>今読むと効く記事</Text>
-        {unlockedArticles(elapsedDays).map((a) => (
-          <View key={a.id} style={styles.articleRow}>
-            <Text style={{ fontWeight: '800' }}>{a.title}</Text>
-            <Text style={styles.articleText}>{a.content}</Text>
+        <Text style={styles.sectionTitle}>次にアンロックされる記事</Text>
+        {nextArticle ? (
+          <View style={styles.articleRow}>
+            <Text style={{ fontWeight: '800' }}>{nextArticle.title}</Text>
+            {/* もし「あと◯日」を出したい場合は下を有効化 */}
+            {/* <Text style={styles.muted}>
+              解禁まであと {Math.max(0, nextArticle.min - Math.floor(elapsedDays))} 日
+            </Text> */}
           </View>
-        ))}
-        {unlockedArticles(elapsedDays).length === 0 && (
-          <Text style={styles.muted}>まだ記事は解禁されていません。</Text>
+        ) : (
+          <Text style={styles.muted}>すべて解禁済みです 🎉</Text>
         )}
       </View>
     </ScrollView>
